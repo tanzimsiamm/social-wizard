@@ -108,10 +108,22 @@ const refreshTokenFromDb = async (token: string): Promise<IAuthTokens> => {
   };
 };
 
+const logoutFromDb = async (userId: string) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
 
+  await prisma.user.update({
+    where: { id: userId },
+    data: { refreshToken: null },
+  });
+
+  return true;
+};
 
 export const authServices = {
   registerUserToDb,
   loginUserToDb,
   refreshTokenFromDb,
+  logoutFromDb,
 };

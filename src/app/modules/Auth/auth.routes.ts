@@ -6,6 +6,7 @@ import {
 } from "./auth.validation";
 import { authController } from "./auth.controller";
 import { validateRequest } from "../../middlewares/validateRequest";
+import { authenticate } from "../../middlewares/auth";
 
 const router = Router();
 
@@ -22,5 +23,7 @@ router.post(
   validateRequest(refreshTokenSchema),
   authController.refreshToken
 );
+
+router.post("/logout", authenticate, authController.logoutUser);
 
 export default router;

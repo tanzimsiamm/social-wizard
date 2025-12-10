@@ -4,6 +4,7 @@ import catchAsync from "../../../utils/catchAsync";
 import { authServices } from "./auth.service";
 import { sendSuccessResponse } from "../../../utils/SendResponse";
 import { IUserRegisterInput, IUserLoginInput } from "./auth.interface";
+import ApiError from "../../../errors/ApiErrors";
 
 // Register User
 const registerUser = catchAsync(async (req: Request, res: Response) => {
@@ -42,8 +43,25 @@ const refreshToken = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const logoutUser = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.user?.userId;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  await authServices.logoutFromDb(userId);
+
+  sendSuccessResponse(res, {
+    statusCode: httpStatus.OK,
+    message: "Logged out successfully",
+    data: null,
+  });
+});
+
 export const authController = {
   registerUser,
   loginUser,
   refreshToken,
+  logoutUser,
 };
