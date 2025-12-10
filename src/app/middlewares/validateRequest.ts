@@ -1,15 +1,20 @@
-import { NextFunction, Request, Response } from "express";
-import { AnyZodObject } from "zod";
+import { Request, Response, NextFunction } from "express";
+import { AnyZodObject } from "zod/v3";
 
-const validateRequest =
-  (schema: AnyZodObject) =>
-  async (req: Request, res: Response, next: NextFunction) => {
+/**
+ * Middleware to validate request using Zod schema
+ */
+export const validateRequest = (schema: AnyZodObject) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      await schema.parseAsync(req.body);
-      return next();
-    } catch (err) {
-      next(err);
+      await schema.parseAsync({
+        body: req.body,
+        query: req.query,
+        params: req.params,
+      });
+      next();
+    } catch (error) {
+      next(error);
     }
   };
-
-export default validateRequest;
+};

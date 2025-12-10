@@ -1,95 +1,78 @@
-import { Prisma } from "@prisma/client";
-import { NextFunction, Request, Response } from "express";
-import httpStatus from "http-status";
+import { PrismaClientKnownRequestError } from "@prisma/client/runtime/client";
+import { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
-import handleZodError from "../../errors/handleZodError";
-import parsePrismaValidationError from "../../errors/parsePrismaValidationError";
+import config from "../../config";
 import ApiError from "../../errors/ApiErrors";
+import { IErrorResponse } from "../../interfaces/common";
 
-// TODO Replace `config.NODE_ENV` with your actual environment configuration
-
-// TODO
-const config = {
-  NODE_ENV: process.env.NODE_ENV || "development",
-};
-
-const GlobalErrorHandler = (
+/**
+ * Global error handler middleware
+ */
+export const globalErrorHandler = (
   err: any,
   req: Request,
   res: Response,
   next: NextFunction
-) => {
-  let statusCode: any = httpStatus.INTERNAL_SERVER_ERROR;
-  let message = err.message || "Something went wrong!";
-  let errorSources = [];
-  let errorDetails = err || null;
+): void => {
+  let statusCode = 500;
+  let message = "Internal server error";
+  let errorMessages: Array<{ path: string; message: string }> = [];
 
-  // Handle Zod Validation Errors
+  // Zod validation error
   if (err instanceof ZodError) {
-    const simplifiedError = handleZodError(err);
-    statusCode = simplifiedError?.statusCode;
-    message = simplifiedError?.message;
-    errorSources = simplifiedError?.errorSources;
+    statusCode = 400;
+    message = "Validation error";
+    errorMessages = err.issues.map((error: any) => ({
+      path: error.path.join(".") || "unknown",
+      message: error.message,
+    }));
   }
-  // Handle Custom ApiError
+  // ApiError (custom)
   else if (err instanceof ApiError) {
     statusCode = err.statusCode;
     message = err.message;
-    errorSources = [{ type: "ApiError", details: err.message }];
   }
-  // handle prisma client validation errors
-  else if (err instanceof Prisma.PrismaClientValidationError) {
-    statusCode = httpStatus.BAD_REQUEST;
-    message = parsePrismaValidationError(err.message);
-    errorSources.push("Prisma Client Validation Error");
+  // Prisma validation error
+  else if (err instanceof PrismaClientKnownRequestError) {
+    statusCode = 400;
+    message = "Validation error";
   }
-  // Prisma Client Initialization Error
-  else if (err instanceof Prisma.PrismaClientInitializationError) {
-    statusCode = httpStatus.INTERNAL_SERVER_ERROR;
-    message =
-      "Failed to initialize Prisma Client. Check your database connection or Prisma configuration.";
-    errorSources.push("Prisma Client Initialization Error");
+  // Prisma unique constraint error
+  else if (err instanceof PrismaClientKnownRequestError) {
+    if (err.code === "P2002") {
+      statusCode = 400;
+      message = "Duplicate entry. This record already exists.";
+    } else if (err.code === "P2025") {
+      statusCode = 404;
+      message = "Record not found.";
+    }
   }
-  // Prisma Client Rust Panic Error
-  else if (err instanceof Prisma.PrismaClientRustPanicError) {
-    statusCode = httpStatus.INTERNAL_SERVER_ERROR;
-    message =
-      "A critical error occurred in the Prisma engine. Please try again later.";
-    errorSources.push("Prisma Client Rust Panic Error");
-  }
-  // Prisma Client Unknown Request Error
-  else if (err instanceof Prisma.PrismaClientUnknownRequestError) {
-    statusCode = httpStatus.INTERNAL_SERVER_ERROR;
-    message = "An unknown error occurred while processing the request.";
-    errorSources.push("Prisma Client Unknown Request Error");
-  }
-  // Generic Error Handling (e.g., JavaScript Errors)
-  else if (err instanceof SyntaxError) {
-    statusCode = httpStatus.BAD_REQUEST;
-    message = "Syntax error in the request. Please verify your input.";
-    errorSources.push("Syntax Error");
-  } else if (err instanceof TypeError) {
-    statusCode = httpStatus.BAD_REQUEST;
-    message = "Type error in the application. Please verify your input.";
-    errorSources.push("Type Error");
-  } else if (err instanceof ReferenceError) {
-    statusCode = httpStatus.BAD_REQUEST;
-    message = "Reference error in the application. Please verify your input.";
-    errorSources.push("Reference Error");
-  }
-  // Catch any other error type
-  else {
-    message = "An unexpected error occurred!";
-    errorSources.push("Unknown Error");
+  // JWT errors
+  else if (err.name === "JsonWebTokenError") {
+    statusCode = 401;
+    message = "Invalid token";
+  } else if (err.name === "TokenExpiredError") {
+    statusCode = 401;
+    message = "Token expired";
   }
 
-  res.status(statusCode).json({
+  // Log error in development
+  if (config.nodeEnv === "development") {
+    console.error("Error:", {
+      statusCode,
+      message,
+      errorMessages,
+      stack: err.stack,
+    });
+  }
+
+  // Send response
+  const response: IErrorResponse = {
     success: false,
     message,
-    errorSources,
-    err,
-    stack: config.NODE_ENV === "development" ? err?.stack : null,
-  });
-};
+    ...(errorMessages.length > 0 && { errorMessages }),
+    ...(config.nodeEnv === "development" && { stack: err.stack }),
+  };
 
-export default GlobalErrorHandler;
+  res.status(statusCode).json(response);
+};
