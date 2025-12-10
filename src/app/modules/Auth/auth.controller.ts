@@ -29,7 +29,21 @@ const loginUser = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+// Refresh Token
+const refreshToken = catchAsync(async (req: Request, res: Response) => {
+  const { refreshToken } = req.body;
+
+  const tokens = await authServices.refreshTokenFromDb(refreshToken);
+
+  sendSuccessResponse(res, {
+    statusCode: httpStatus.OK,
+    message: "Token refreshed successfully",
+    data: tokens,
+  });
+});
+
 export const authController = {
   registerUser,
   loginUser,
+  refreshToken,
 };

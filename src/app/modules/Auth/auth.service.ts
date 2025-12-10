@@ -9,7 +9,7 @@ import {
 import ApiError from "../../../errors/ApiErrors";
 import { comparePassword, hashPassword } from "../../../utils/bcrypt.util";
 import { IJwtPayload } from "../../../interfaces/common";
-import { generateToken } from "../../../utils/jwt.util";
+import { generateToken, verifyToken } from "../../../utils/jwt.util";
 const SALT_ROUNDS = 10;
 
 export const registerUserToDb = async (
@@ -71,8 +71,47 @@ const loginUserToDb = async (data: IUserLoginInput): Promise<IAuthTokens> => {
   return { accessToken, refreshToken };
 };
 
+const refreshTokenFromDb = async (token: string): Promise<IAuthTokens> => {
+  const decoded = verifyToken(token, "refresh");
+
+  const user = await prisma.user.findUnique({
+    where: { id: decoded.userId },
+  });
+
+  if (!user || !user.refreshToken) {
+    throw new ApiError(401, "Invalid refresh token");
+  }
+
+  const match = await bcrypt.compare(token, user.refreshToken);
+  if (!match) {
+    throw new ApiError(401, "Refresh token does not match");
+  }
+
+  const payload = {
+    userId: user.id,
+    email: user.email,
+  };
+
+  const newAccessToken = generateToken(payload, "access");
+  const newRefreshToken = generateToken(payload, "refresh");
+
+  const hashedNewRefresh = await bcrypt.hash(newRefreshToken, SALT_ROUNDS);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { refreshToken: hashedNewRefresh },
+  });
+
+  return {
+    accessToken: newAccessToken,
+    refreshToken: newRefreshToken,
+  };
+};
+
+
 
 export const authServices = {
   registerUserToDb,
   loginUserToDb,
-}
+  refreshTokenFromDb,
+};
