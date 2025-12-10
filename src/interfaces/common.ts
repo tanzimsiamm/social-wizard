@@ -10,10 +10,18 @@ export interface IUser {
   createdAt: Date;
 }
 
+export interface IApiResponse<T = any> {
+  success: boolean;
+  message: string;
+  data?: T | null | undefined;
+  error?: string | undefined;
+  errors?: Array<{ path: string; message: string; }> | undefined;
+}
+
+
 export interface IJwtPayload {
   userId: string;
   email: string;
-  role: string;
   iat?: number;
   exp?: number;
 }
@@ -23,7 +31,6 @@ export interface IAuthRequest {
   user?: {
     userId: string;
     email: string;
-    role: string;
   };
 }
 

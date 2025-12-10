@@ -1,24 +1,35 @@
-import jwt from 'jsonwebtoken';
-import config from '../config';
-import { IJwtPayload } from '../interfaces/common';
+import jwt from "jsonwebtoken";
+import config from "../config";
+import { IJwtPayload } from "../interfaces/common";
 
-// Generate JWT token
- 
 export const generateToken = (
-  payload: Omit<IJwtPayload, 'iat' | 'exp'>
+  payload: Omit<IJwtPayload, "iat" | "exp">,
+  type: "access" | "refresh" = "access"
 ): string => {
-  return jwt.sign(payload, config.jwt.secret as string, {
-    expiresIn: config.jwt.expiresIn,
-  });
+  const secret =
+    type === "access"
+      ? config.jwt.accessSecret
+      : config.jwt.refreshSecret;
+
+  const expiresIn =
+    type === "access"
+      ? config.jwt.accessExpiresIn
+      : config.jwt.refreshExpiresIn;
+
+  return jwt.sign(payload, secret, { expiresIn });
 };
 
-// Verify JWT token
- 
-export const verifyToken = (token: string): IJwtPayload => {
-  return jwt.verify(token, config.jwt.secret as string) as IJwtPayload;
-};
+export const verifyToken = (
+  token: string,
+  type: "access" | "refresh" = "access"
+): IJwtPayload => {
+  const secret =
+    type === "access"
+      ? config.jwt.accessSecret
+      : config.jwt.refreshSecret;
 
-// Decode JWT token without verification
+  return jwt.verify(token, secret) as IJwtPayload;
+};
 
 export const decodeToken = (token: string): IJwtPayload | null => {
   return jwt.decode(token) as IJwtPayload | null;
